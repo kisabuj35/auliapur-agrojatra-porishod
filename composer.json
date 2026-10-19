@@ -4,7 +4,7 @@
     "description": "আউলিয়াপুর অগ্রযাত্রা পরিষদ - ডিজিটাল পোর্টাল ERP মাস্টার ইঞ্জিন",
     "require": {
         "php": "^8.2",
-        "laravel/framework": "^11.9"
+        "laravel/framework": "^11.30"
     },
     "autoload": {
         "psr-4": {
@@ -15,12 +15,9 @@
         ]
     },
     "config": {
-        "policy.advisories.block": false,
-        "audit": {
-            "block": false
-        },
         "optimize-autoloader": true,
-        "preferred-install": "dist"
+        "preferred-install": "dist",
+        "sort-packages": true
     },
     "minimum-stability": "stable",
     "prefer-stable": true
