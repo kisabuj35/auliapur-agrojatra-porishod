@@ -1,6 +1,6 @@
 FROM php:8.2-apache
 
-# ১. প্রয়োজনীয় সিস্টেম প্যাকেজ ইনস্টল
+# ১. প্রয়োজনীয় সিস্টেম লাইব্রেরি ইনস্টল (mbstring এর জন্য libonig-dev সহ)
 RUN apt-get update && apt-get install -y \
     git \
     curl \
@@ -12,13 +12,13 @@ RUN apt-get update && apt-get install -y \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# ২. শুধুমাত্র ডাটাবেজের জন্য আবশ্যক pdo_mysql ইনস্টল
-RUN docker-php-ext-install pdo_mysql
+# ২. লারাভেল ও TiDB এর জন্য আবশ্যক এক্সটেনশনগুলো ইনস্টল
+RUN docker-php-ext-install pdo_mysql mbstring bcmath
 
-# ৩. Apache mod_rewrite চালু করা
+# ৩. Apache mod_rewrite সক্রিয় করা
 RUN a2enmod rewrite
 
-# ৪. Apache রুট ডিরেক্টরি Laravel-এর public ফোল্ডারে সেট করা
+# ৪. Apache রুট ডিরেক্টরি public ফোল্ডারে সেট করা
 ENV APACHE_DOCUMENT_ROOT=/var/www/html/public
 RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/sites-available/*.conf
 RUN sed -ri -e 's!/var/www/!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/apache2.conf /etc/apache2/conf-available/*.conf
@@ -28,10 +28,10 @@ WORKDIR /var/www/html
 # ৫. Composer যুক্ত করা
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
-# ৬. গিটহাবের সমস্ত প্রজেক্ট ফাইল কপি করা
+# ৬. প্রজেক্ট ফাইল কপি করা
 COPY . .
 
-# ৭. প্রয়োজনীয় সব ক্যাশ ও স্টোরেজ ফোল্ডার স্বয়ংক্রিয়ভাবে তৈরি ও পারমিশন ফিক্স
+# ৭. প্রয়োজনীয় ক্যাশ ও স্টোরেজ ফোল্ডার তৈরি ও পারমিশন
 RUN mkdir -p storage/framework/cache/data \
     storage/framework/sessions \
     storage/framework/views \
@@ -40,10 +40,10 @@ RUN mkdir -p storage/framework/cache/data \
     && chown -R www-data:www-data storage bootstrap/cache \
     && chmod -R 775 storage bootstrap/cache
 
-# ৮. মেমরি ক্র্যাশ মুক্ত রেখে Composer প্যাকেজ ইনস্টল
+# ৮. মেমরি ক্র্যাশ ও প্ল্যাটফর্ম চেকিং মুক্ত রেখে Composer ইনস্টল
 ENV COMPOSER_ALLOW_SUPERUSER=1
 ENV COMPOSER_MEMORY_LIMIT=-1
-RUN composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist
+RUN composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist --ignore-platform-reqs
 
 EXPOSE 80
 
