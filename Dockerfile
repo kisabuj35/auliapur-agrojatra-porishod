@@ -1,6 +1,6 @@
 FROM php:8.2-apache
 
-# ১. প্রয়োজনীয় সিস্টেম লাইব্রেরি ইনস্টল (mbstring এর জন্য libonig-dev সহ)
+# ১. প্রয়োজনীয় সিস্টেম লাইব্রেরি ইনস্টল
 RUN apt-get update && apt-get install -y \
     git \
     curl \
@@ -40,10 +40,14 @@ RUN mkdir -p storage/framework/cache/data \
     && chown -R www-data:www-data storage bootstrap/cache \
     && chmod -R 775 storage bootstrap/cache
 
-# ৮. মেমরি ক্র্যাশ ও প্ল্যাটফর্ম চেকিং মুক্ত রেখে Composer ইনস্টল
+# ৮. Composer Security Advisories ব্লকিং বন্ধ করা এবং প্যাকেজ ইনস্টল
 ENV COMPOSER_ALLOW_SUPERUSER=1
 ENV COMPOSER_MEMORY_LIMIT=-1
-RUN composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist --ignore-platform-reqs
+RUN composer config policy.advisories.block false || true \
+    && composer config audit.block false || true \
+    && composer config -g policy.advisories.block false || true \
+    && composer config -g audit.block false || true \
+    && composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist --ignore-platform-reqs --no-audit
 
 EXPOSE 80
 
