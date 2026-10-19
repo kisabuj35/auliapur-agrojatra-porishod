@@ -25,8 +25,8 @@ RUN sed -ri -e 's!/var/www/!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/apache2.conf
 
 WORKDIR /var/www/html
 
-# ৫. Composer যুক্ত করা
-COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
+# ৫. স্থিতিশীল Composer 2.7 ব্যবহার করা (যা নতুন ব্লকিং পলিসিমুক্ত)
+COPY --from=composer:2.7 /usr/bin/composer /usr/bin/composer
 
 # ৬. প্রজেক্ট ফাইল কপি করা
 COPY . .
@@ -40,11 +40,10 @@ RUN mkdir -p storage/framework/cache/data \
     && chown -R www-data:www-data storage bootstrap/cache \
     && chmod -R 775 storage bootstrap/cache
 
-# ৮. Composer Security Block বাইপাস করে প্যাকেজ ইনস্টল
+# ৮. প্যাকেজ ইনস্টল
 ENV COMPOSER_ALLOW_SUPERUSER=1
 ENV COMPOSER_MEMORY_LIMIT=-1
-RUN php -r '$c=json_decode(file_get_contents("composer.json"),true); $c["config"]["policy.advisories.block"]=false; $c["config"]["audit"]["block"]=false; file_put_contents("composer.json",json_encode($c));' \
-    && composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist --ignore-platform-reqs --no-audit
+RUN composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist --ignore-platform-reqs --no-audit
 
 EXPOSE 80
 
