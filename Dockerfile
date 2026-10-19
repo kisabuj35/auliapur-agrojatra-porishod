@@ -1,51 +1,17 @@
 FROM php:8.2-apache
 
-# ১. প্রয়োজনীয় সিস্টেম লাইব্রেরি ইনস্টল
-RUN apt-get update && apt-get install -y \
-    git \
-    curl \
-    libpng-dev \
-    libonig-dev \
-    libxml2-dev \
-    zip \
-    unzip \
-    ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
+# TiDB ও MySQL এর জন্য pdo_mysql ইনস্টল
+RUN docker-php-ext-install pdo_mysql
 
-# ২. লারাভেল ও TiDB এর জন্য আবশ্যক এক্সটেনশনগুলো ইনস্টল
-RUN docker-php-ext-install pdo_mysql mbstring bcmath
-
-# ৩. Apache mod_rewrite সক্রিয় করা
+# Apache mod_rewrite চালু
 RUN a2enmod rewrite
 
-# ৪. Apache রুট ডিরেক্টরি public ফোল্ডারে সেট করা
-ENV APACHE_DOCUMENT_ROOT=/var/www/html/public
-RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/sites-available/*.conf
-RUN sed -ri -e 's!/var/www/!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/apache2.conf /etc/apache2/conf-available/*.conf
+# প্রজেক্টের সব ফাইল Apache সার্ভারে কপি
+COPY . /var/www/html/
 
-WORKDIR /var/www/html
-
-# ৫. স্থিতিশীল Composer 2.7 ব্যবহার করা (যা নতুন ব্লকিং পলিসিমুক্ত)
-COPY --from=composer:2.7 /usr/bin/composer /usr/bin/composer
-
-# ৬. প্রজেক্ট ফাইল কপি করা
-COPY . .
-
-# ৭. প্রয়োজনীয় ক্যাশ ও স্টোরেজ ফোল্ডার তৈরি ও পারমিশন
-RUN mkdir -p storage/framework/cache/data \
-    storage/framework/sessions \
-    storage/framework/views \
-    storage/logs \
-    bootstrap/cache \
-    && chown -R www-data:www-data storage bootstrap/cache \
-    && chmod -R 775 storage bootstrap/cache
-
-# ৮. প্যাকেজ ইনস্টল
-ENV COMPOSER_ALLOW_SUPERUSER=1
-ENV COMPOSER_MEMORY_LIMIT=-1
-RUN composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist --ignore-platform-reqs --no-audit
+# পারমিশন ঠিক করা
+RUN chown -R www-data:www-data /var/www/html
 
 EXPOSE 80
 
-# ৯. সার্ভার চালু হওয়ার সময় অটো-মাইগ্রেশন ও Apache স্টার্ট
-CMD sh -c "php artisan key:generate --force || true; php artisan storage:link || true; php artisan migrate --force || true; exec apache2-foreground"
+CMD ["apache2-foreground"]
