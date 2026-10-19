@@ -1,18 +1,18 @@
 #!/bin/bash
 
-# Generate key if not set
-php artisan key:generate --force
+# অ্যাপ কি তৈরি করা (যদি না থাকে)
+php artisan key:generate --force || true
 
-# Create storage link
-php artisan storage:link
+# স্টোরেজ লিংক তৈরি
+php artisan storage:link || true
 
-# Clear old cache
-php artisan config:clear
-php artisan route:clear
-php artisan view:clear
+# পুরনো ক্যাশ পরিষ্কার
+php artisan config:clear || true
+php artisan route:clear || true
+php artisan view:clear || true
 
-# Auto migrate TiDB database
-php artisan migrate --force
+# TiDB ডাটাবেজে স্বয়ংক্রিয় টেবিল তৈরি
+php artisan migrate --force || true
 
-# Start Apache Server
-apache2-foreground
+# Apache সার্ভার চালু করা
+exec apache2-foreground
