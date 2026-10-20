@@ -243,7 +243,7 @@
   }
   window.google = { script: { run: createRunProxy(null, null) } };
 
-  // পেজ লোডার (সরাসরি আসল HTML ফাইল লোড করবে)
+  // পেজ লোডার (এখন এটি সরাসরি pages/ ফোল্ডার থেকে ফাইল লোড করবে)
   function navigateTo(pageName) {
     const loader = document.getElementById('loading');
     const mainContent = document.getElementById('main-content');
@@ -251,9 +251,10 @@
     if (loader) loader.classList.remove('hidden');
     if (mainContent) mainContent.style.opacity = '0.3';
 
-    fetch(`${pageName}.html`)
+    // pages ফোল্ডার থেকে পেজ লোড করার পাথ
+    fetch(`pages/${pageName}.html`)
       .then(res => {
-        if (!res.ok) throw new Error("ফাইলটি লোড করা সম্ভব হয়নি");
+        if (!res.ok) throw new Error("ফাইলটি pages ফোল্ডারে পাওয়া যায়নি");
         return res.text();
       })
       .then(html => {
