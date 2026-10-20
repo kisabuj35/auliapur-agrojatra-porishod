@@ -1,5 +1,4 @@
 <?php
-// ১. ব্রাউজারে যেন কোনো HTML এরর ট্যাগ (<br /><b>) না যায়, তার সুরক্ষা
 error_reporting(0);
 ini_set('display_errors', '0');
 
@@ -13,7 +12,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
-// ২. TiDB ক্লাউড ডাটাবেজ সংযোগ
 $host = getenv('DB_HOST') ?: 'gateway01.ap-southeast-1.prod.aws.tidbcloud.com';
 $port = getenv('DB_PORT') ?: '4000';
 $db   = getenv('DB_DATABASE') ?: 'test';
@@ -31,7 +29,7 @@ try {
     }
     $pdo = new PDO("mysql:host={$host};port={$port};dbname={$db};charset=utf8mb4", $user, $pass, $options);
 
-    // সব টেবিল স্বয়ংক্রিয় তৈরি
+    // ১. ছবির কলামসমূহ LONGTEXT করা যাতে বড় সাইজের ছবিও আটকে না যায়
     $pdo->exec("
         CREATE TABLE IF NOT EXISTS members (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -49,7 +47,7 @@ try {
             profession VARCHAR(100),
             blood_group VARCHAR(10),
             monthly_fee DECIMAL(10,2) DEFAULT 100.00,
-            photo TEXT,
+            photo LONGTEXT,
             status VARCHAR(30) DEFAULT 'সক্রিয়',
             join_date DATE,
             end_date DATE,
@@ -76,7 +74,7 @@ try {
             org VARCHAR(150) DEFAULT 'আউলিয়াপুর অগ্রযাত্রা পরিষদ',
             fb_link TEXT,
             message TEXT,
-            photo TEXT,
+            photo LONGTEXT,
             start_date DATE,
             end_date DATE,
             address TEXT,
@@ -110,7 +108,7 @@ try {
             district VARCHAR(50),
             upazila VARCHAR(50),
             village VARCHAR(100),
-            photo TEXT,
+            photo LONGTEXT,
             status VARCHAR(30) DEFAULT 'সক্রিয়',
             donor_type VARCHAR(50) DEFAULT 'সাধারণ',
             member_id VARCHAR(50),
@@ -126,12 +124,12 @@ try {
             donor_blood VARCHAR(10),
             donor_phone VARCHAR(30),
             donation_date DATE,
-            donor_photo TEXT,
+            donor_photo LONGTEXT,
             recipient_name VARCHAR(100),
             recipient_phone VARCHAR(30),
             recipient_address TEXT,
             recipient_disease VARCHAR(150),
-            recipient_photo TEXT,
+            recipient_photo LONGTEXT,
             remarks TEXT,
             status VARCHAR(30) DEFAULT 'অনুমোদিত',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -165,7 +163,7 @@ try {
             id INT AUTO_INCREMENT PRIMARY KEY,
             type VARCHAR(50),
             title VARCHAR(200),
-            url TEXT,
+            url LONGTEXT,
             category VARCHAR(100),
             description TEXT,
             date_str VARCHAR(50),
@@ -190,18 +188,25 @@ try {
         );
     ");
 
-    // ডিফল্ট সুপার-অ্যাডমিন অ্যাকাউন্ট
+    // ২. TiDB-তে পূর্বের বিদ্যমান কলামগুলোকেও LONGTEXT-এ রূপান্তর করে নেওয়া
+    try {
+        $pdo->exec("ALTER TABLE members MODIFY photo LONGTEXT");
+        $pdo->exec("ALTER TABLE committees MODIFY photo LONGTEXT");
+        $pdo->exec("ALTER TABLE blood_donors MODIFY photo LONGTEXT");
+        $pdo->exec("ALTER TABLE blood_donations MODIFY donor_photo LONGTEXT");
+        $pdo->exec("ALTER TABLE blood_donations MODIFY recipient_photo LONGTEXT");
+        $pdo->exec("ALTER TABLE media_contents MODIFY url LONGTEXT");
+    } catch (Exception $ex) {}
+
+    // সুপার এডমিন নিশ্চিতকরণ
     $stmt = $pdo->prepare("SELECT COUNT(*) FROM admin_users WHERE username = 'superadmin'");
     $stmt->execute();
     if ($stmt->fetchColumn() == 0) {
         $pdo->exec("INSERT INTO admin_users (username, password, name, role, status) VALUES ('superadmin', 'AAP2026', 'প্রধান প্রশাসক', 'Super Admin', 'সক্রিয়')");
     }
 
-} catch (Exception $e) {
-    // সাইলেন্ট হ্যান্ডলিং
-}
+} catch (Exception $e) {}
 
-// বাংলা সংখ্যা ও তারিখ হেল্পার
 function toBn($num) {
     if ($num === null || $num === '') return '০';
     $bn = ['০','১','২','৩','৪','৫','৬','৭','৮','৯'];
@@ -213,18 +218,13 @@ function toEn($str) {
     return str_replace($bn, range(0, 9), (string)$str);
 }
 
-// ইনপুট রিসিভার
 $raw = json_decode(file_get_contents("php://input"), true) ?? [];
 $action = $raw['action'] ?? ($_GET['action'] ?? '');
 $args = $raw['arguments'] ?? [];
 
-// =========================================================================
-// ৩. সমস্ত হ্যান্ডলার অ্যাকশন (একটিরও মিসিং থাকবে না)
-// =========================================================================
-
 try {
 
-    // ১. সিকিউর অ্যাডমিন লগইন
+    // অ্যাডমিন লগইন
     if ($action === 'checkAdminLoginSecure') {
         $u = trim($args[0] ?? '');
         $p = trim($args[1] ?? '');
@@ -247,46 +247,122 @@ try {
         exit;
     }
 
-    // ২. হোম পেজ ডাটাবেজ সামারি
-    if ($action === 'getAuliyapurHomeData' || $action === 'home_summary') {
-        $mCount = 150; $bCount = 45; $pCount = 550;
+    // নতুন সদস্য নিবন্ধন (ছবি সহ)
+    if ($action === 'submitMemberRegistration') {
+        $p = $args[0] ?? [];
+        $nextId = "AAP001";
         if (isset($pdo)) {
-            $m = $pdo->query("SELECT COUNT(*) FROM members WHERE status = 'সক্রিয়'")->fetchColumn();
-            if ($m) $mCount = $m;
-            $b = $pdo->query("SELECT COUNT(*) FROM blood_donations WHERE status = 'অনুমোদিত'")->fetchColumn();
-            if ($b) $bCount = $b;
-            $p = $pdo->query("SELECT SUM(amount) FROM campaigns WHERE sector LIKE '%রোপণ%'")->fetchColumn();
-            if ($p) $pCount = $p + 500;
-        }
+            $c = $pdo->query("SELECT COUNT(*) FROM members")->fetchColumn();
+            $nextId = "AAP" . str_pad($c + 1, 3, "0", STR_PAD_LEFT);
 
-        echo json_encode([
-            "status" => "success",
-            "data" => [
-                "summary" => [
-                    "totalPlanted" => toBn($pCount) . "+ টি",
-                    "totalMembers" => toBn($mCount) . " জন",
-                    "totalDonations" => toBn($bCount) . " বার"
-                ],
-                "recentActivities" => [
-                    ["date" => "১২-০৭-২০২৬", "title" => "বৃক্ষরোপণ কর্মসূচি ২০২৬", "desc" => "পরিবেশ সুরক্ষায় পটুয়াখালী জেলাজুড়ে ফলদ ও বনজ চারাগাছ রোপণ কর্মসূচি সম্পন্ন।"],
-                    ["date" => "০৫-০৭-২০২৬", "title" => "শিক্ষা সামগ্রী বিতরণ প্রজেক্ট", "desc" => "সুবিধাবঞ্চিত মেধাবী শিক্ষার্থীদের মাঝে বিনামূল্যে বই, খাতা ও ব্যাগ উপহার।"],
-                    ["date" => "০১-০৬-২০২৬", "title" => "শীতবস্ত্র ও কম্বল বিতরণ", "desc" => "তীব্র শীতে অসহায় দুস্থ পরিবারে উষ্ণতার ছোঁয়া পৌঁছে দেওয়া হয়েছে।"]
-                ],
-                "upcomingProjects" => [
-                    ["day" => "২৫", "month" => "JUL", "title" => "বিনামূল্যে রক্ত পরীক্ষা ক্যাম্প", "location" => "আউলিয়াপুর ইউনিয়ন পরিষদ"],
-                    ["day" => "১০", "month" => "AUG", "title" => "মেধাবী ছাত্র বৃত্তি প্রদান", "location" => "আউলিয়াপুর আদর্শ স্কুল"],
-                    ["day" => "১৫", "month" => "SEP", "title" => "অগ্রযাত্রা বর্ষপূর্তি ২০২৬", "location" => "অগ্রযাত্রা পরিষদ কার্যালয়"]
-                ],
-                "donors" => [
-                    ["name" => "মোঃ হাফিজুর রহমান", "designation" => "দাতা সদস্য", "org" => "পটুয়াখালী সদর", "phone" => "০১৭১০১৮১০৫৯", "photo" => ""],
-                    ["name" => "আব্দুর রহিম হাওলাদার", "designation" => "দাতা সদস্য", "org" => "আউলিয়াপুর", "phone" => "০১৭১০১৮১০৫৯", "photo" => ""]
-                ]
-            ]
-        ]);
+            $stmt = $pdo->prepare("INSERT INTO members (member_id, name, father_name, mother_name, gender, education, designation, address, phone, nid, profession, blood_group, monthly_fee, photo, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'পেন্ডিং')");
+            $stmt->execute([
+                $nextId,
+                $p['name'] ?? '',
+                $p['fatherName'] ?? '',
+                $p['motherName'] ?? '',
+                $p['gender'] ?? 'পুরুষ',
+                $p['education'] ?? '',
+                $p['designation'] ?? 'সাধারণ সদস্য',
+                $p['address'] ?? '',
+                $p['phone'] ?? '',
+                $p['nid'] ?? '',
+                $p['profession'] ?? '',
+                $p['bloodGroup'] ?? '',
+                toEn($p['monthlyFee'] ?? 100),
+                $p['photoData'] ?? ($p['photo'] ?? ''),
+                
+            ]);
+        }
+        echo json_encode(["status" => "success", "data" => ["success" => true, "memberId" => $nextId]]);
         exit;
     }
 
-    // ৩. ক্যাম্পেইন / প্রকল্প তালিকা (যা ১ম এররটি সমাধান করবে)
+    // নতুন কমিটি নিবন্ধন (ছবি সহ)
+    if ($action === 'submitCommittee' || $action === 'submitCommitteeMember') {
+        $p = $args[0] ?? [];
+        if (isset($pdo)) {
+            $stmt = $pdo->prepare("INSERT INTO committees (type, name, start_date, end_date, phone, designation, org, fb_link, message, profession, education, father_name, mother_name, blood_group, email, nid, gender, address, photo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+            $stmt->execute([
+                $p['type'] ?? 'কার্যনির্বাহী কমিটি',
+                $p['name'] ?? '',
+                $p['startDate'] ?: null,
+                $p['endDate'] ?: null,
+                $p['phone'] ?? '',
+                $p['designation'] ?? '',
+                $p['org'] ?? 'আউলিয়াপুর অগ্রযাত্রা পরিষদ',
+                $p['fbLink'] ?? '',
+                $p['message'] ?? '',
+                $p['profession'] ?? '',
+                $p['education'] ?? '',
+                $p['fatherName'] ?? '',
+                $p['motherName'] ?? '',
+                $p['bloodGroup'] ?? 'A+',
+                $p['email'] ?? '',
+                $p['nid'] ?? '',
+                $p['gender'] ?? 'পুরুষ',
+                $p['address'] ?? '',
+                $p['photoData'] ?? ($p['photo'] ?? '')
+            ]);
+        }
+        echo json_encode(["status" => "success", "data" => ["success" => true]]);
+        exit;
+    }
+
+    // ড্রাইভ আপলোড কল হ্যান্ডলার (ফটো ডাটা সরাসরি রিটার্ন করে)
+    if ($action === 'uploadToGoogleDrive') {
+        $photoData = $args[0] ?? '';
+        echo json_encode(["status" => "success", "data" => $photoData]);
+        exit;
+    }
+
+    // সদস্য তালিকা ও লেজার
+    if ($action === 'getAuliyapurData') {
+        $ledgers = [];
+        if (isset($pdo)) {
+            $stmt = $pdo->query("SELECT * FROM members WHERE status = 'সক্রিয়' ORDER BY id ASC");
+            while ($row = $stmt->fetch()) {
+                $fee = (float)$row['monthly_fee'];
+                $months = 12;
+                $accrued = ($months * $fee) + 50.00;
+                $paid = 0;
+                $due = max(0, $accrued - $paid);
+
+                $ledgers[] = [
+                    "id" => $row['member_id'],
+                    "name" => $row['name'],
+                    "fatherName" => $row['father_name'] ?: "N/A",
+                    "motherName" => $row['mother_name'] ?: "N/A",
+                    "gender" => $row['gender'] ?: "পুরুষ",
+                    "education" => $row['education'] ?: "N/A",
+                    "designation" => $row['designation'] ?: "সাধারণ সদস্য",
+                    "memberType" => $row['member_type'] ?: "সাধারণ সদস্য",
+                    "address" => $row['address'] ?: "আউলিয়াপুর",
+                    "phone" => $row['phone'],
+                    "nid" => $row['nid'] ?: "N/A",
+                    "profession" => $row['profession'] ?: "N/A",
+                    "bloodGroup" => $row['blood_group'] ?: "N/A",
+                    "email" => $row['email'] ?: "N/A",
+                    "fbLink" => $row['fb_link'] ?: "#",
+                    "comments" => $row['comments'] ?: "N/A",
+                    "monthlyFee" => toBn($fee),
+                    "joinDate" => $row['join_date'] ?: "২০২৬-০১-০১",
+                    "months" => toBn($months),
+                    "totalSubscription" => toBn($accrued),
+                    "totalPaid" => toBn($paid),
+                    "specialDonation" => "০",
+                    "grandTotalPaid" => toBn($paid),
+                    "totalDue" => toBn($due),
+                    "photo" => $row['photo'] ?: "",
+                    "bloodDonationsCount" => "০"
+                ];
+            }
+        }
+        echo json_encode(["status" => "success", "data" => ["ledgers" => $ledgers]]);
+        exit;
+    }
+
+    // ক্যাম্পেইন / প্রজেক্ট তালিকা
     if ($action === 'getCampaignLedger') {
         $list = [];
         if (isset($pdo)) {
@@ -315,7 +391,7 @@ try {
         exit;
     }
 
-    // ৪. ব্যয় খতিয়ান তালিকা
+    // ব্যয় খতিয়ান
     if ($action === 'getExpenseLedger') {
         $list = [];
         if (isset($pdo)) {
@@ -336,7 +412,7 @@ try {
         exit;
     }
 
-    // ৫. অ্যাডমিন আর্থিক খতিয়ান ও অডিট রিপোর্ট
+    // অ্যাডমিন আর্থিক অডিট রিপোর্ট
     if ($action === 'getAdminFinancialReport') {
         $totalIncome = 0; $totalExpense = 0;
         $cashbookTransactions = [];
@@ -436,7 +512,7 @@ try {
         exit;
     }
 
-    // ৬. পেন্ডিং আবেদন তালিকা (সদস্য, চাঁদা ও রক্তদান)
+    // পেন্ডিং আবেদন তালিকা
     if ($action === 'getPendingItems') {
         $members = []; $payments = []; $blood = [];
         if (isset($pdo)) {
@@ -457,7 +533,7 @@ try {
         exit;
     }
 
-    // ৭. সদস্য তালিকা (সংশোধন বোর্ডের জন্য)
+    // সদস্য তালিকা (এডিটর)
     if ($action === 'getAdminMemberList') {
         $list = [];
         if (isset($pdo)) {
@@ -493,7 +569,7 @@ try {
         exit;
     }
 
-    // ৮. কমিটি ডাটা (Advisors, Executives, List)
+    // কমিটি ডাটা
     if ($action === 'getCommitteeData') {
         $list = [];
         if (isset($pdo)) {
@@ -518,53 +594,7 @@ try {
         exit;
     }
 
-    // ৯. সদস্য পূর্ণাঙ্গ তথ্য ও লেজার হিসাব
-    if ($action === 'getAuliyapurData') {
-        $ledgers = [];
-        if (isset($pdo)) {
-            $stmt = $pdo->query("SELECT * FROM members WHERE status = 'সক্রিয়' ORDER BY id ASC");
-            while ($row = $stmt->fetch()) {
-                $fee = (float)$row['monthly_fee'];
-                $months = 12;
-                $accrued = ($months * $fee) + 50.00;
-                $paid = 0;
-                $due = max(0, $accrued - $paid);
-
-                $ledgers[] = [
-                    "id" => $row['member_id'],
-                    "name" => $row['name'],
-                    "fatherName" => $row['father_name'] ?: "N/A",
-                    "motherName" => $row['mother_name'] ?: "N/A",
-                    "gender" => $row['gender'] ?: "পুরুষ",
-                    "education" => $row['education'] ?: "N/A",
-                    "designation" => $row['designation'] ?: "সাধারণ সদস্য",
-                    "memberType" => $row['member_type'] ?: "সাধারণ সদস্য",
-                    "address" => $row['address'] ?: "আউলিয়াপুর",
-                    "phone" => $row['phone'],
-                    "nid" => $row['nid'] ?: "N/A",
-                    "profession" => $row['profession'] ?: "N/A",
-                    "bloodGroup" => $row['blood_group'] ?: "N/A",
-                    "email" => $row['email'] ?: "N/A",
-                    "fbLink" => $row['fb_link'] ?: "#",
-                    "comments" => $row['comments'] ?: "N/A",
-                    "monthlyFee" => toBn($fee),
-                    "joinDate" => $row['join_date'] ?: "২০২৬-০১-০১",
-                    "months" => toBn($months),
-                    "totalSubscription" => toBn($accrued),
-                    "totalPaid" => toBn($paid),
-                    "specialDonation" => "০",
-                    "grandTotalPaid" => toBn($paid),
-                    "totalDue" => toBn($due),
-                    "photo" => $row['photo'] ?: "",
-                    "bloodDonationsCount" => "০"
-                ];
-            }
-        }
-        echo json_encode(["status" => "success", "data" => ["ledgers" => $ledgers]]);
-        exit;
-    }
-
-    // ১০. রক্তদান খতিয়ান
+    // রক্তদান তালিকা
     if ($action === 'getBloodDonationList') {
         $donations = []; $total = 0; $registered = 0;
         $groupStats = ["A+" => 0, "A-" => 0, "B+" => 0, "B-" => 0, "AB+" => 0, "AB-" => 0, "O+" => 0, "O-" => 0];
@@ -613,7 +643,7 @@ try {
         exit;
     }
 
-    // ১১. ডোনার তালিকা
+    // ডোনার তালিকা
     if ($action === 'getDonorList') {
         $donors = [];
         if (isset($pdo)) {
@@ -637,7 +667,7 @@ try {
         exit;
     }
 
-    // ১২. আইডি দিয়ে সদস্যের ডাটা খোঁজা
+    // সদস্য ডাটা লুকআপ
     if ($action === 'getMemberInfoById') {
         $id = trim($args[0] ?? '');
         $res = ["success" => false];
@@ -661,35 +691,7 @@ try {
         exit;
     }
 
-    // ১৩. সাবমিশন এপিআইসমূহ
-    if ($action === 'submitMemberRegistration') {
-        $p = $args[0] ?? [];
-        $nextId = "AAP001";
-        if (isset($pdo)) {
-            $c = $pdo->query("SELECT COUNT(*) FROM members")->fetchColumn();
-            $nextId = "AAP" . str_pad($c + 1, 3, "0", STR_PAD_LEFT);
-
-            $stmt = $pdo->prepare("INSERT INTO members (member_id, name, father_name, mother_name, gender, education, designation, address, phone, nid, profession, blood_group, monthly_fee, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'পেন্ডিং')");
-            $stmt->execute([
-                $nextId,
-                $p['name'] ?? '',
-                $p['fatherName'] ?? '',
-                $p['motherName'] ?? '',
-                $p['gender'] ?? 'পুরুষ',
-                $p['education'] ?? '',
-                $p['designation'] ?? 'সাধারণ সদস্য',
-                $p['address'] ?? '',
-                $p['phone'] ?? '',
-                $p['nid'] ?? '',
-                $p['profession'] ?? '',
-                $p['bloodGroup'] ?? '',
-                $p['monthlyFee'] ?? 100
-            ]);
-        }
-        echo json_encode(["status" => "success", "data" => ["success" => true, "memberId" => $nextId]]);
-        exit;
-    }
-
+    // পেমেন্ট সাবমিট
     if ($action === 'submitMemberPayment' || $action === 'submitDonationPayment') {
         $p = $args[0] ?? [];
         if (isset($pdo)) {
@@ -706,30 +708,35 @@ try {
         exit;
     }
 
+    // রক্তদান সাবমিট
     if ($action === 'submitBloodDonation') {
         $p = $args[0] ?? [];
         if (isset($pdo)) {
-            $stmt = $pdo->prepare("INSERT INTO blood_donations (donor_name, donor_father, donor_blood, donor_phone, donation_date, recipient_name, recipient_phone, recipient_address, recipient_disease, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'পেন্ডিং')");
+            $stmt = $pdo->prepare("INSERT INTO blood_donations (donor_name, donor_father, donor_blood, donor_phone, donation_date, donor_photo, recipient_name, recipient_phone, recipient_address, recipient_disease, recipient_photo, remarks, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'পেন্ডিং')");
             $stmt->execute([
                 $p['donorName'] ?? '',
                 $p['donorFather'] ?? '',
                 $p['donorBlood'] ?? '',
                 $p['donorPhone'] ?? '',
                 $p['donationDate'] ?? date('Y-m-d'),
+                $p['donorPhotoData'] ?? '',
                 $p['recipientName'] ?? '',
                 $p['recipientPhone'] ?? '',
                 $p['recipientAddress'] ?? '',
-                $p['recipientDisease'] ?? ''
+                $p['recipientDisease'] ?? '',
+                $p['recipientPhotoData'] ?? '',
+                $p['remarks'] ?? ''
             ]);
         }
         echo json_encode(["status" => "success", "data" => ["success" => true]]);
         exit;
     }
 
+    // ডোনার নিবন্ধন সাবমিট
     if ($action === 'submitDonorRegistration') {
         $p = $args[0] ?? [];
         if (isset($pdo)) {
-            $stmt = $pdo->prepare("INSERT INTO blood_donors (name, phone, gender, blood_group, last_donation_date, weight, division, district, upazila, village, donor_type, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'সক্রিয়')");
+            $stmt = $pdo->prepare("INSERT INTO blood_donors (name, phone, gender, blood_group, last_donation_date, weight, division, district, upazila, village, donor_type, photo, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'সক্রিয়')");
             $stmt->execute([
                 $p['name'] ?? '',
                 $p['phone'] ?? '',
@@ -741,13 +748,15 @@ try {
                 $p['district'] ?? '',
                 $p['upazila'] ?? '',
                 $p['village'] ?? '',
-                $p['donorType'] ?? 'সাধারণ'
+                $p['donorType'] ?? 'সাধারণ',
+                $p['photoData'] ?? ''
             ]);
         }
         echo json_encode(["status" => "success", "data" => ["success" => true]]);
         exit;
     }
 
+    // ব্যয় রেকর্ড সাবমিট
     if ($action === 'submitExpenseRecord') {
         $p = $args[0] ?? [];
         if (isset($pdo)) {
@@ -765,6 +774,7 @@ try {
         exit;
     }
 
+    // প্রকল্প ক্যাম্পেইন সাবমিট
     if ($action === 'submitProjectCampaign') {
         $p = $args[0] ?? [];
         if (isset($pdo)) {
@@ -783,37 +793,7 @@ try {
         exit;
     }
 
-    if ($action === 'submitCommittee' || $action === 'submitCommitteeMember') {
-        $p = $args[0] ?? [];
-        if (isset($pdo)) {
-            $stmt = $pdo->prepare("INSERT INTO committees (type, name, start_date, end_date, phone, designation, org, fb_link, message, profession, education, father_name, mother_name, blood_group, email, nid, gender, address, photo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-            $stmt->execute([
-                $p['type'] ?? 'কার্যনির্বাহী কমিটি',
-                $p['name'] ?? '',
-                $p['startDate'] ?: null,
-                $p['endDate'] ?: null,
-                $p['phone'] ?? '',
-                $p['designation'] ?? '',
-                $p['org'] ?? 'আউলিয়াপুর অগ্রযাত্রা পরিষদ',
-                $p['fbLink'] ?? '',
-                $p['message'] ?? '',
-                $p['profession'] ?? '',
-                $p['education'] ?? '',
-                $p['fatherName'] ?? '',
-                $p['motherName'] ?? '',
-                $p['bloodGroup'] ?? 'A+',
-                $p['email'] ?? '',
-                $p['nid'] ?? '',
-                $p['gender'] ?? 'পুরুষ',
-                $p['address'] ?? '',
-                $p['photoData'] ?? ''
-            ]);
-        }
-        echo json_encode(["status" => "success", "data" => ["success" => true]]);
-        exit;
-    }
-
-    // ১৪. অ্যাডমিন অ্যাকশনসমূহ
+    // অ্যাডমিন অনুমোদন
     if ($action === 'approvePendingMember' || $action === 'approveMember') {
         $id = (int)($args[0] ?? 0);
         if (isset($pdo) && $id > 0) {
@@ -853,12 +833,38 @@ try {
         exit;
     }
 
-    if ($action === 'uploadToGoogleDrive') {
-        echo json_encode(["status" => "success", "data" => ($args[0] ?? '')]);
+    if ($action === 'updateSheetRecord') {
+        $tab = $args[0] ?? '';
+        $rowIdx = (int)($args[1] ?? 0);
+        $data = $args[2] ?? [];
+
+        if (isset($pdo) && $rowIdx > 0) {
+            if ($tab === 'সদস্য_তালিকা') {
+                $stmt = $pdo->prepare("UPDATE members SET name = ?, father_name = ?, mother_name = ?, gender = ?, designation = ?, member_type = ?, phone = ?, nid = ?, profession = ?, education = ?, blood_group = ?, monthly_fee = ?, status = ?, join_date = ?, end_date = ?, email = ?, fb_link = ?, comments = ?, address = ?, photo = ? WHERE id = ?");
+                $stmt->execute([
+                    $data['name'] ?? '', $data['fatherName'] ?? '', $data['motherName'] ?? '', $data['gender'] ?? 'পুরুষ',
+                    $data['designation'] ?? 'সাধারণ সদস্য', $data['memberType'] ?? 'সাধারণ সদস্য', $data['phone'] ?? '',
+                    $data['nid'] ?? '', $data['profession'] ?? '', $data['education'] ?? '', $data['bloodGroup'] ?? 'A+',
+                    toEn($data['monthlyFee'] ?? 100), $data['status'] ?? 'সক্রিয়', $data['joinDate'] ?: null, $data['endDate'] ?: null,
+                    $data['email'] ?? '', $data['fbLink'] ?? '', $data['comments'] ?? '', $data['address'] ?? '', $data['photo'] ?? '',
+                    $rowIdx
+                ]);
+            } elseif ($tab === 'কমিটি_তালিকা') {
+                $stmt = $pdo->prepare("UPDATE committees SET type = ?, name = ?, start_date = ?, end_date = ?, father_name = ?, mother_name = ?, blood_group = ?, nid = ?, email = ?, gender = ?, phone = ?, designation = ?, profession = ?, education = ?, org = ?, fb_link = ?, address = ?, message = ?, photo = ? WHERE id = ?");
+                $stmt->execute([
+                    $data['type'] ?? 'কার্যনির্বাহী কমিটি', $data['name'] ?? '', $data['startDate'] ?: null, $data['endDate'] ?: null,
+                    $data['fatherName'] ?? '', $data['motherName'] ?? '', $data['bloodGroup'] ?? 'A+', $data['nid'] ?? '',
+                    $data['email'] ?? '', $data['gender'] ?? 'পুরুষ', $data['phone'] ?? '', $data['designation'] ?? '',
+                    $data['profession'] ?? '', $data['education'] ?? '', $data['org'] ?? 'আউলিয়াপুর অগ্রযাত্রা পরিষদ',
+                    $data['fbLink'] ?? '', $data['address'] ?? '', $data['message'] ?? '', $data['photo'] ?? '',
+                    $rowIdx
+                ]);
+            }
+        }
+        echo json_encode(["status" => "success", "data" => ["success" => true]]);
         exit;
     }
 
-    // ১৫. মিডিয়া এবং অন্যান্য গেটার
     if ($action === 'getPhotoGalleryData' || $action === 'getVideoGalleryData' || $action === 'getNoticeBoardData' || $action === 'getPressReleaseData' || $action === 'getAwardsData') {
         echo json_encode(["status" => "success", "data" => []]);
         exit;
@@ -869,11 +875,9 @@ try {
         exit;
     }
 
-    // ডিফল্ট নিরাপদ রেসপন্স
     echo json_encode(["status" => "success", "data" => []]);
 
 } catch (Throwable $e) {
-    // কোনো জটিল এরর হলেও যেন পরিষ্কার JSON যায়, কোনো HTML ট্যাগ না যায়
     echo json_encode(["status" => "error", "message" => $e->getMessage()]);
     exit;
 }
