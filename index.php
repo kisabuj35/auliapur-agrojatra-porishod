@@ -35,7 +35,33 @@
   <!-- Cropper.js -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
+<style>
+  /* লোগো যাতে কোনো অবস্থাতেই বড় না হতে পারে */
+  header img {
+    max-width: 48px !important;
+    max-height: 48px !important;
+    width: 48px !important;
+    height: 48px !important;
+    object-fit: cover !important;
+    border-radius: 9999px !important;
+  }
 
+  /* ফন্ট ও বেসিক সিএসএস ফিক্স */
+  body { 
+    font-family: 'Hind Siliguri', sans-serif; 
+    margin: 0;
+    padding: 0;
+  }
+  
+  .nav-active { 
+    color: #059669 !important; 
+    background-color: #f0fdf4; 
+    border-radius: 8px; 
+  }
+</style>
+
+<!-- ব্যাকআপ হিসেবে সরাসরি কম্পাইল করা Tailwind CSS লিংক যোগ করুন -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css">
   <style>
     body { font-family: 'Hind Siliguri', sans-serif; }
     .nav-active { color: #059669 !important; background-color: #f0fdf4; border-radius: 8px; }
