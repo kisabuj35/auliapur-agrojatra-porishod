@@ -1,45 +1,43 @@
 <?php
-// =========================================================================
-// ১. সার্ভার সাইড পেজ রেন্ডারার (গিটহাবের resources/views/pages/ ফাইলগুলো লোড করবে)
-// =========================================================================
-if (isset($_GET['render_page'])) {
+// ১. ব্রাউজার যে পেজটি দেখতে চাইছে, সেটি সরাসরি সার্ভার থেকে বের করে দেওয়া
+if (isset($_GET['load_page'])) {
     header("Content-Type: text/html; charset=UTF-8");
-    $page = preg_replace('/[^a-zA-Z0-9_\-]/', '', $_GET['render_page']);
+    $requested = preg_replace('/[^a-zA-Z0-9_\-]/', '', $_GET['load_page']);
     
-    // পেজের নাম ও ফাইলের ম্যাপিং
-    $map = [
-        'blood-board' => 'blood_board',
+    // ফাইলটি রুট ফোল্ডারে বা resources/views/pages/ ফোল্ডারে খোঁজা
+    $possiblePaths = [
+        __DIR__ . '/' . $requested . '.html',
+        __DIR__ . '/resources/views/pages/' . $requested . '.html',
+        __DIR__ . '/resources/views/pages/' . $requested . '.blade.php',
+        __DIR__ . '/resources/views/pages/' . str_replace('-', '_', $requested) . '.blade.php'
     ];
-    $actualFile = $map[$page] ?? $page;
-    $filePath = __DIR__ . '/resources/views/pages/' . $actualFile . '.blade.php';
 
-    if (!file_exists($filePath)) {
-        echo "<div class='max-w-xl mx-auto my-12 p-8 bg-red-50 text-red-600 rounded-3xl text-center font-bold'>পেজটি পাওয়া যায়নি: {$page}</div>";
-        exit;
+    $found = false;
+    foreach ($possiblePaths as $path) {
+        if (file_exists($path)) {
+            $content = file_get_contents($path);
+
+            // ব্লেড সিনট্যাক্স থাকলে তা পরিষ্কার করে আসল এইচটিএমএল অংশটি বের করে নেওয়া
+            if (preg_match('/@section\(\'content\'\)(.*?)@endsection/s', $content, $m)) {
+                $content = $m[1];
+            }
+            if (preg_match('/@push\(\'scripts\'\)(.*?)@endpush/s', $content, $sm)) {
+                $content .= $sm[1];
+            }
+            $content = preg_replace('/@extends\([^)]+\)/', '', $content);
+            $content = preg_replace('/@section\([^)]+\)/', '', $content);
+            $content = str_replace(['@endsection', '@csrf'], '', $content);
+            $content = preg_replace('/\{\{\s*[^}]+\s*\}\}/', '', $content);
+
+            echo $content;
+            $found = true;
+            break;
+        }
     }
 
-    $raw = file_get_contents($filePath);
-
-    // ব্লেড সিনট্যাক্স পরিষ্কার করা যাতে পিএইচপি ছাড়াই ব্রাউজার সিএসএস ও এইচটিএমএল পড়তে পারে
-    if (preg_match('/@section\(\'content\'\)(.*?)@endsection/s', $raw, $matches)) {
-        $html = $matches[1];
-    } else {
-        $html = $raw;
+    if (!$found) {
+        echo "<div class='max-w-xl mx-auto my-12 p-8 bg-amber-50 text-amber-800 rounded-3xl text-center font-bold'>পেজটি প্রস্তুত হচ্ছে... অনুগ্রহ করে কিছুক্ষণ পর আবার চেষ্টা করুন।</div>";
     }
-
-    if (preg_match('/@push\(\'scripts\'\)(.*?)@endpush/s', $raw, $sMatches)) {
-        $html .= $sMatches[1];
-    }
-
-    // ব্লেড ডিরেক্টিভ ও রাউট ফাংশন প্রতিস্থাপন
-    $html = preg_replace('/@extends\([^)]+\)/', '', $html);
-    $html = preg_replace('/@section\([^)]+\)/', '', $html);
-    $html = str_replace(['@endsection', '@csrf'], '', $html);
-    $html = preg_replace('/\{\{\s*route\([\'"]([^\'"]+)[\'"](?:,\s*[\'"]?([^\'")]+)[\'"]?)?\)\s*\}\}/', '#$1', $html);
-    $html = preg_replace('/\{\{\s*request\([^\)]+\)\s*\}\}/', '', $html);
-    $html = preg_replace('/\{\{\s*[^}]+\s*\}\}/', '', $html);
-
-    echo $html;
     exit;
 }
 ?>
@@ -56,33 +54,31 @@ if (isset($_GET['render_page'])) {
   <style>
     body { font-family: 'Hind Siliguri', sans-serif; }
     .nav-active { color: #059669 !important; background-color: #f0fdf4; border-radius: 8px; }
-    .loader { border-top-color: #059669; animation: spinner 1s linear infinite; }
-    @keyframes spinner { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
   </style>
 </head>
 <body class="bg-gray-50 flex flex-col min-h-screen text-gray-800">
 
-<!-- টপ ইউটিলিটি বার -->
-<div class="bg-slate-900 text-white text-xs py-2 border-b border-slate-800 select-none">
-  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center flex-wrap gap-2">
-    <div class="flex items-center space-x-2 font-medium">
-      <i class="fa-solid fa-flag text-emerald-500"></i>
-      <span>আজকের উদ্যোগ আগামীর অগ্রযাত্রা</span>
-    </div>
-    <div class="flex items-center space-x-4 text-gray-300">
-      <a href="tel:+8801710181059" class="hover:text-emerald-400 transition flex items-center">
-        <i class="fa-solid fa-phone text-emerald-500 mr-1.5"></i> +৮৮০ ১৭১০-১৮১০৫৯
-      </a>
-      <span class="hidden sm:inline text-slate-700">|</span>
-      <a href="mailto:kisabuj35@gmail.com" class="hover:text-emerald-400 transition flex items-center">
-        <i class="fa-solid fa-envelope text-emerald-500 mr-1.5"></i> kisabuj35@gmail.com 
-      </a>
+<!-- টপ স্লোগান বার -->
+<header class="bg-white shadow-md sticky top-0 z-50">
+  <div class="bg-slate-900 text-white text-xs py-2 border-b border-slate-800 select-none">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center flex-wrap gap-2">
+      <div class="flex items-center space-x-2 font-medium">
+        <i class="fa-solid fa-flag text-emerald-500"></i>
+        <span>আজকের উদ্যোগ আগামীর অগ্রযাত্রা</span>
+      </div>
+      <div class="flex items-center space-x-4 text-gray-300">
+        <a href="tel:+8801710181059" class="hover:text-emerald-400 transition flex items-center">
+          <i class="fa-solid fa-phone text-emerald-500 mr-1.5"></i> +৮৮০ ১৭১০-১৮১০৫৯
+        </a>
+        <span class="hidden sm:inline text-slate-700">|</span>
+        <a href="mailto:kisabuj35@gmail.com" class="hover:text-emerald-400 transition flex items-center">
+          <i class="fa-solid fa-envelope text-emerald-500 mr-1.5"></i> kisabuj35@gmail.com 
+        </a>
+      </div>
     </div>
   </div>
-</div>
 
-<!-- হেডার ও প্রফেশনাল ড্রপডাউন মেনুবার -->
-<header class="bg-white shadow-md sticky top-0 z-50">
+  <!-- সম্পূর্ণ ড্রপডাউন মেনুবার -->
   <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
     <div class="flex justify-between h-20 items-center">
       
@@ -99,16 +95,16 @@ if (isset($_GET['render_page'])) {
 
       <!-- ডেস্কটপ মেনুবার -->
       <nav class="hidden md:flex space-x-1 xl:space-x-2 text-sm font-semibold text-gray-600 items-center">
-        <a href="#home" id="nav-home" class="hover:bg-emerald-50 hover:text-emerald-700 px-3 py-2 rounded-lg transition duration-200">হোম</a>
+        <a href="#home" id="nav-home" class="hover:bg-emerald-50 hover:text-emerald-700 px-3 py-2 rounded-lg transition">হোম</a>
         
         <!-- ১. আমাদের সম্পর্কে -->
         <div class="relative group">
-          <button class="hover:bg-emerald-50 hover:text-emerald-700 px-3 py-2 rounded-lg flex items-center transition focus:outline-none">
+          <button class="hover:bg-emerald-50 hover:text-emerald-700 px-3 py-2 rounded-lg flex items-center transition">
             আমাদের সম্পর্কে <i class="fa-solid fa-chevron-down text-[10px] ml-1 transition group-hover:rotate-180"></i>
           </button>
           <div class="absolute left-0 top-full pt-1 w-52 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition duration-200 z-50">
             <div class="bg-white border border-gray-100 rounded-lg shadow-lg py-1">
-              <a href="#about_intro" class="flex items-center px-4 py-2.5 text-xs text-gray-700 hover:bg-emerald-50 hover:text-emerald-600"><i class="fa-solid fa-address-card mr-2 text-emerald-600 w-4"></i>আমাদের সম্পর্কে</a>
+              <a href="#about_intro" class="flex items-center px-4 py-2.5 text-xs text-gray-700 hover:bg-emerald-50 hover:text-emerald-600"><i class="fa-solid fa-address-card mr-2 text-emerald-600 w-4"></i>আমাদের সম্পর্কে জানুন</a>
               <a href="#about_rules" class="flex items-center px-4 py-2.5 text-xs text-gray-700 hover:bg-emerald-50 hover:text-emerald-600"><i class="fa-solid fa-scale-balanced mr-2 text-emerald-600 w-4"></i>সংগঠনের বিধিমালা</a>
               <a href="#about_mission" class="flex items-center px-4 py-2.5 text-xs text-gray-700 hover:bg-emerald-50 hover:text-emerald-600"><i class="fa-solid fa-bullseye mr-2 text-emerald-600 w-4"></i>লক্ষ্য ও উদ্দেশ্য</a>
               <a href="#about_faq" class="flex items-center px-4 py-2.5 text-xs text-gray-700 hover:bg-emerald-50 hover:text-emerald-600"><i class="fa-solid fa-circle-question mr-2 text-emerald-600 w-4"></i>প্রশ্ন ও উত্তর</a>
@@ -118,7 +114,7 @@ if (isset($_GET['render_page'])) {
 
         <!-- ২. কমিটি -->
         <div class="relative group">
-          <button class="hover:bg-emerald-50 hover:text-emerald-700 px-3 py-2 rounded-lg flex items-center transition focus:outline-none">
+          <button class="hover:bg-emerald-50 hover:text-emerald-700 px-3 py-2 rounded-lg flex items-center transition">
             কমিটি <i class="fa-solid fa-chevron-down text-[10px] ml-1 transition group-hover:rotate-180"></i>
           </button>
           <div class="absolute left-0 top-full pt-1 w-52 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition duration-200 z-50">
@@ -132,7 +128,7 @@ if (isset($_GET['render_page'])) {
 
         <!-- ৩. মিডিয়া -->
         <div class="relative group">
-          <button class="hover:bg-emerald-50 hover:text-emerald-700 px-3 py-2 rounded-lg flex items-center transition focus:outline-none">
+          <button class="hover:bg-emerald-50 hover:text-emerald-700 px-3 py-2 rounded-lg flex items-center transition">
             মিডিয়া <i class="fa-solid fa-chevron-down text-[10px] ml-1 transition group-hover:rotate-180"></i>
           </button>
           <div class="absolute left-0 top-full pt-1 w-52 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition duration-200 z-50">
@@ -148,7 +144,7 @@ if (isset($_GET['render_page'])) {
 
         <!-- ৪. প্রকল্প -->
         <div class="relative group">
-          <button class="hover:bg-emerald-50 hover:text-emerald-700 px-3 py-2 rounded-lg flex items-center transition focus:outline-none">
+          <button class="hover:bg-emerald-50 hover:text-emerald-700 px-3 py-2 rounded-lg flex items-center transition">
             প্রকল্প <i class="fa-solid fa-chevron-down text-[10px] ml-1 transition group-hover:rotate-180"></i>
           </button>
           <div class="absolute left-0 top-full pt-1 w-56 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition duration-200 z-50">
@@ -165,7 +161,7 @@ if (isset($_GET['render_page'])) {
 
         <!-- ৫. সদস্য পোর্টাল -->
         <div class="relative group">
-          <button class="hover:bg-emerald-50 hover:text-emerald-700 px-3 py-2 rounded-lg flex items-center transition focus:outline-none">
+          <button class="hover:bg-emerald-50 hover:text-emerald-700 px-3 py-2 rounded-lg flex items-center transition">
             সদস্য পোর্টাল <i class="fa-solid fa-chevron-down text-[10px] ml-1 transition group-hover:rotate-180"></i>
           </button>
           <div class="absolute left-0 top-full pt-1 w-52 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition duration-200 z-50">
@@ -180,7 +176,7 @@ if (isset($_GET['render_page'])) {
 
         <!-- ৬. রক্তদান -->
         <div class="relative group">
-          <button class="hover:bg-emerald-50 hover:text-emerald-700 px-3 py-2 rounded-lg flex items-center transition focus:outline-none">
+          <button class="hover:bg-emerald-50 hover:text-emerald-700 px-3 py-2 rounded-lg flex items-center transition">
             রক্তদান <i class="fa-solid fa-chevron-down text-[10px] ml-1 transition group-hover:rotate-180"></i>
           </button>
           <div class="absolute left-0 top-full pt-1 w-56 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition duration-200 z-50">
@@ -201,7 +197,7 @@ if (isset($_GET['render_page'])) {
         <!-- যোগাযোগ -->
         <a href="#contact" class="hover:bg-emerald-50 hover:text-emerald-700 px-3 py-2 rounded-lg transition">যোগাযোগ</a>
         
-        <!-- অ্যাডমিন -->
+        <!-- অ্যাডমিন লগইন -->
         <a href="#admin_panel" class="bg-slate-900 text-white hover:bg-emerald-600 px-4 py-2 rounded-lg transition flex items-center">
           <i class="fa-solid fa-lock mr-2"></i>অ্যাডমিন
         </a>
@@ -209,20 +205,20 @@ if (isset($_GET['render_page'])) {
     </div>
   </div>
 
-  <!-- মার্কি ব্যানার -->
+  <!-- স্ক্রলিং মার্কি বার্তা -->
   <div class="bg-amber-400 text-amber-950 text-xs font-bold py-2 overflow-hidden flex items-center shadow-inner border-t border-amber-300">
     <div class="bg-amber-500 px-4 py-1 rounded-r-full shrink-0 z-10 shadow-md text-amber-950"><i class="fa-solid fa-bullhorn mr-1.5"></i>সর্বশেষ বার্তা:</div>
     <marquee class="flex-grow select-none" behavior="scroll" direction="left" scrollamount="5">
-      * আউলিয়াপুর অগ্রযাত্রা পরিষদের নতুন সদস্য নিবন্ধন ও রক্তদান পোর্টাল এখন সম্পূর্ণ সচল *
+      * আউলিয়াপুর অগ্রযাত্রা পরিষদের নতুন সদস্য নিবন্ধন ফর্ম ও কেন্দ্রীয় রক্তদান পোর্টাল এখন সম্পূর্ণ সচল *
     </marquee>
   </div>
 </header>
 
-<!-- মূল কনটেন্ট কন্টেইনার (এখানে সব পেজ লোড হবে) -->
+<!-- মূল কনটেন্ট ফ্রেম -->
 <main class="flex-grow">
   <div id="loading" class="hidden fixed inset-0 bg-gray-950/40 backdrop-blur-sm z-50 flex items-center justify-center">
     <div class="bg-white p-6 rounded-3xl shadow-xl flex flex-col items-center">
-      <div class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-10 w-10 mb-3"></div>
+      <div class="animate-spin rounded-full border-4 border-t-emerald-600 border-gray-200 h-10 w-10 mb-3"></div>
       <p class="text-gray-700 font-bold text-xs">তথ্য লোড হচ্ছে...</p>
     </div>
   </div>
@@ -267,7 +263,41 @@ if (isset($_GET['render_page'])) {
 
 <script>
   // =========================================================================
-  // ২. ক্লায়েন্ট সাইড রাউটার (যেকোনো মেনুতে ক্লিক করলে ওই পেজ স্বয়ংক্রিয়ভাবে লোড হবে)
+  // ২. Google Apps Script এর বিকল্প TiDB ব্রিজ
+  // (আপনার আগের সব পেজের জাভাস্ক্রিপ্ট কোড কোনো পরিবর্তন ছাড়াই TiDB-তে কাজ করবে)
+  // =========================================================================
+  function executeServerFunction(functionName, args, onSuccess, onFailure) {
+    fetch('api.php', {
+      method: 'POST',
+      body: JSON.stringify({ action: functionName, arguments: args }),
+      headers: { 'Content-Type': 'application/json' }
+    })
+    .then(res => res.json())
+    .then(result => {
+      if (result.status === 'success') {
+        if (onSuccess) onSuccess(result.data);
+      } else {
+        if (onFailure) onFailure(result.message || 'ত্রুটি ঘটেছে');
+      }
+    })
+    .catch(err => {
+      if (onFailure) onFailure(err);
+    });
+  }
+
+  function createRunProxy(onSuccess, onFailure) {
+    return new Proxy({}, {
+      get: function(target, prop) {
+        if (prop === 'withSuccessHandler') return function(sc) { return createRunProxy(sc, onFailure); };
+        if (prop === 'withFailureHandler') return function(fc) { return createRunProxy(onSuccess, fc); };
+        return function(...args) { executeServerFunction(prop, args, onSuccess, onFailure); };
+      }
+    });
+  }
+  window.google = { script: { run: createRunProxy(null, null) } };
+
+  // =========================================================================
+  // ৩. রিয়েল-টাইম রাউটার (ক্লিক করা মাত্রই সেই পেজটি লোড হবে)
   // =========================================================================
   function navigateTo(pageName) {
     const loader = document.getElementById('loading');
@@ -276,9 +306,9 @@ if (isset($_GET['render_page'])) {
     if (loader) loader.classList.remove('hidden');
     if (mainContent) mainContent.style.opacity = '0.3';
 
-    fetch(`index.php?render_page=${pageName}`)
+    fetch(`index.php?load_page=${pageName}`)
       .then(res => {
-        if (!res.ok) throw new Error("পেজটি খুঁজে পাওয়া যায়নি");
+        if (!res.ok) throw new Error("পেজটি লোড করা সম্ভব হয়নি");
         return res.text();
       })
       .then(html => {
