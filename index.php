@@ -214,22 +214,33 @@
 </footer>
 
 <script>
-  // TiDB ও ব্যাকএন্ড এপিআই কানেক্টর
+  // সুরক্ষিত TiDB ডাটাবেজ ব্রিজ (এরর মেসেজ যাতে কোনোভাবেই undefined না হয়)
   function executeServerFunction(functionName, args, onSuccess, onFailure) {
     fetch('api.php', {
       method: 'POST',
       body: JSON.stringify({ action: functionName, arguments: args }),
       headers: { 'Content-Type': 'application/json' }
     })
-    .then(res => res.json())
+    .then(async res => {
+      const text = await res.text();
+      try {
+        return JSON.parse(text);
+      } catch(e) {
+        throw new Error("সার্ভার রেসপন্স বুঝতে সমস্যা হয়েছে।");
+      }
+    })
     .then(result => {
       if (result.status === 'success') {
         if (onSuccess) onSuccess(result.data);
       } else {
-        if (onFailure) onFailure(result.message || 'ত্রুটি');
+        const errorMsg = result.message || 'অজানা সমস্যা';
+        if (onFailure) onFailure({ message: errorMsg, toString: () => errorMsg });
       }
     })
-    .catch(err => { if (onFailure) onFailure(err); });
+    .catch(err => {
+      const errorMsg = (err && err.message) ? err.message : String(err);
+      if (onFailure) onFailure({ message: errorMsg, toString: () => errorMsg });
+    });
   }
 
   function createRunProxy(onSuccess, onFailure) {
@@ -243,7 +254,6 @@
   }
   window.google = { script: { run: createRunProxy(null, null) } };
 
-  // পেজ লোডার (এখন এটি সরাসরি pages/ ফোল্ডার থেকে ফাইল লোড করবে)
   function navigateTo(pageName) {
     const loader = document.getElementById('loading');
     const mainContent = document.getElementById('main-content');
@@ -251,7 +261,6 @@
     if (loader) loader.classList.remove('hidden');
     if (mainContent) mainContent.style.opacity = '0.3';
 
-    // pages ফোল্ডার থেকে পেজ লোড করার পাথ
     fetch(`pages/${pageName}.html`)
       .then(res => {
         if (!res.ok) throw new Error("ফাইলটি pages ফোল্ডারে পাওয়া যায়নি");
