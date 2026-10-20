@@ -1,46 +1,3 @@
-<?php
-// ১. ব্রাউজার যে পেজটি দেখতে চাইছে, সেটি সরাসরি সার্ভার থেকে বের করে দেওয়া
-if (isset($_GET['load_page'])) {
-    header("Content-Type: text/html; charset=UTF-8");
-    $requested = preg_replace('/[^a-zA-Z0-9_\-]/', '', $_GET['load_page']);
-    
-    // ফাইলটি রুট ফোল্ডারে বা resources/views/pages/ ফোল্ডারে খোঁজা
-    $possiblePaths = [
-        __DIR__ . '/' . $requested . '.html',
-        __DIR__ . '/resources/views/pages/' . $requested . '.html',
-        __DIR__ . '/resources/views/pages/' . $requested . '.blade.php',
-        __DIR__ . '/resources/views/pages/' . str_replace('-', '_', $requested) . '.blade.php'
-    ];
-
-    $found = false;
-    foreach ($possiblePaths as $path) {
-        if (file_exists($path)) {
-            $content = file_get_contents($path);
-
-            // ব্লেড সিনট্যাক্স থাকলে তা পরিষ্কার করে আসল এইচটিএমএল অংশটি বের করে নেওয়া
-            if (preg_match('/@section\(\'content\'\)(.*?)@endsection/s', $content, $m)) {
-                $content = $m[1];
-            }
-            if (preg_match('/@push\(\'scripts\'\)(.*?)@endpush/s', $content, $sm)) {
-                $content .= $sm[1];
-            }
-            $content = preg_replace('/@extends\([^)]+\)/', '', $content);
-            $content = preg_replace('/@section\([^)]+\)/', '', $content);
-            $content = str_replace(['@endsection', '@csrf'], '', $content);
-            $content = preg_replace('/\{\{\s*[^}]+\s*\}\}/', '', $content);
-
-            echo $content;
-            $found = true;
-            break;
-        }
-    }
-
-    if (!$found) {
-        echo "<div class='max-w-xl mx-auto my-12 p-8 bg-amber-50 text-amber-800 rounded-3xl text-center font-bold'>পেজটি প্রস্তুত হচ্ছে... অনুগ্রহ করে কিছুক্ষণ পর আবার চেষ্টা করুন।</div>";
-    }
-    exit;
-}
-?>
 <!DOCTYPE html>
 <html lang="bn">
 <head>
@@ -50,7 +7,6 @@ if (isset($_GET['load_page'])) {
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  
   <style>
     body { font-family: 'Hind Siliguri', sans-serif; }
     .nav-active { color: #059669 !important; background-color: #f0fdf4; border-radius: 8px; }
@@ -58,7 +14,7 @@ if (isset($_GET['load_page'])) {
 </head>
 <body class="bg-gray-50 flex flex-col min-h-screen text-gray-800">
 
-<!-- টপ স্লোগান বার -->
+<!-- টপ স্লোগান ও হেল্পলাইন বার -->
 <header class="bg-white shadow-md sticky top-0 z-50">
   <div class="bg-slate-900 text-white text-xs py-2 border-b border-slate-800 select-none">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center flex-wrap gap-2">
@@ -82,7 +38,6 @@ if (isset($_GET['load_page'])) {
   <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
     <div class="flex justify-between h-20 items-center">
       
-      <!-- লোগো -->
       <div class="flex items-center space-x-2 sm:space-x-3 cursor-pointer select-none" onclick="navigateTo('home')">
         <div class="bg-emerald-50 p-1 rounded-full shadow-md shrink-0 w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center overflow-hidden">
           <img src="https://lh3.googleusercontent.com/d/1Z6FVIIFOBq8kWcdalYa0lczot3yLS5Vl" alt="Logo" class="w-full h-full object-cover rounded-full">
@@ -93,9 +48,8 @@ if (isset($_GET['load_page'])) {
         </div>
       </div>
 
-      <!-- ডেস্কটপ মেনুবার -->
       <nav class="hidden md:flex space-x-1 xl:space-x-2 text-sm font-semibold text-gray-600 items-center">
-        <a href="#home" id="nav-home" class="hover:bg-emerald-50 hover:text-emerald-700 px-3 py-2 rounded-lg transition">হোম</a>
+        <a href="#home" class="nav-active px-3 py-2 rounded-lg">হোম</a>
         
         <!-- ১. আমাদের সম্পর্কে -->
         <div class="relative group">
@@ -181,7 +135,7 @@ if (isset($_GET['load_page'])) {
           </button>
           <div class="absolute left-0 top-full pt-1 w-56 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition duration-200 z-50">
             <div class="bg-white border border-gray-100 rounded-lg shadow-lg py-1">
-              <a href="#blood_board" class="flex items-center px-4 py-2.5 text-xs text-gray-700 hover:bg-emerald-50 hover:text-emerald-600"><i class="fa-solid fa-chart-line mr-2 text-emerald-600 w-4"></i>রক্তদাতার পরিসংখ্যান</a>
+              <a href="#blood-board" class="flex items-center px-4 py-2.5 text-xs text-gray-700 hover:bg-emerald-50 hover:text-emerald-600"><i class="fa-solid fa-chart-line mr-2 text-emerald-600 w-4"></i>রক্তদাতার পরিসংখ্যান</a>
               <a href="#donor_list" class="flex items-center px-4 py-2.5 text-xs text-gray-700 hover:bg-emerald-50 hover:text-emerald-600"><i class="fa-solid fa-users-viewfinder mr-2 text-emerald-600 w-4"></i>রক্ত ডোনার তালিকা</a>
               <a href="#donor_registration" class="flex items-center px-4 py-2.5 text-xs text-gray-700 hover:bg-emerald-50 hover:text-emerald-600"><i class="fa-solid fa-user-plus mr-2 text-emerald-600 w-4"></i>রক্ত ডোনার নিবন্ধন</a>
               <a href="#blood_donation" class="flex items-center px-4 py-2.5 text-xs text-gray-700 hover:bg-emerald-50 hover:text-emerald-600"><i class="fa-solid fa-droplet mr-2 text-emerald-600 w-4"></i>রক্তদান ফর্ম</a> 
@@ -194,10 +148,8 @@ if (isset($_GET['load_page'])) {
           <i class="fa-solid fa-heart mr-1.5 animate-pulse text-sm"></i> দান করুন
         </a>
         
-        <!-- যোগাযোগ -->
         <a href="#contact" class="hover:bg-emerald-50 hover:text-emerald-700 px-3 py-2 rounded-lg transition">যোগাযোগ</a>
         
-        <!-- অ্যাডমিন লগইন -->
         <a href="#admin_panel" class="bg-slate-900 text-white hover:bg-emerald-600 px-4 py-2 rounded-lg transition flex items-center">
           <i class="fa-solid fa-lock mr-2"></i>অ্যাডমিন
         </a>
@@ -205,7 +157,7 @@ if (isset($_GET['load_page'])) {
     </div>
   </div>
 
-  <!-- স্ক্রলিং মার্কি বার্তা -->
+  <!-- স্ক্রলিং বার্তা -->
   <div class="bg-amber-400 text-amber-950 text-xs font-bold py-2 overflow-hidden flex items-center shadow-inner border-t border-amber-300">
     <div class="bg-amber-500 px-4 py-1 rounded-r-full shrink-0 z-10 shadow-md text-amber-950"><i class="fa-solid fa-bullhorn mr-1.5"></i>সর্বশেষ বার্তা:</div>
     <marquee class="flex-grow select-none" behavior="scroll" direction="left" scrollamount="5">
@@ -240,7 +192,7 @@ if (isset($_GET['load_page'])) {
       <ul class="space-y-2 text-xs">
         <li><a href="#about_intro" class="hover:text-emerald-500">আমাদের পরিচিতি</a></li>
         <li><a href="#committee_list" class="hover:text-emerald-500">কমিটি তালিকা</a></li>
-        <li><a href="#blood_board" class="hover:text-emerald-500">রক্তদান খতিয়ান</a></li>
+        <li><a href="#blood-board" class="hover:text-emerald-500">রক্তদান খতিয়ান</a></li>
       </ul>
     </div>
     <div class="space-y-3">
@@ -262,10 +214,7 @@ if (isset($_GET['load_page'])) {
 </footer>
 
 <script>
-  // =========================================================================
-  // ২. Google Apps Script এর বিকল্প TiDB ব্রিজ
-  // (আপনার আগের সব পেজের জাভাস্ক্রিপ্ট কোড কোনো পরিবর্তন ছাড়াই TiDB-তে কাজ করবে)
-  // =========================================================================
+  // TiDB ও ব্যাকএন্ড এপিআই কানেক্টর
   function executeServerFunction(functionName, args, onSuccess, onFailure) {
     fetch('api.php', {
       method: 'POST',
@@ -277,12 +226,10 @@ if (isset($_GET['load_page'])) {
       if (result.status === 'success') {
         if (onSuccess) onSuccess(result.data);
       } else {
-        if (onFailure) onFailure(result.message || 'ত্রুটি ঘটেছে');
+        if (onFailure) onFailure(result.message || 'ত্রুটি');
       }
     })
-    .catch(err => {
-      if (onFailure) onFailure(err);
-    });
+    .catch(err => { if (onFailure) onFailure(err); });
   }
 
   function createRunProxy(onSuccess, onFailure) {
@@ -296,9 +243,7 @@ if (isset($_GET['load_page'])) {
   }
   window.google = { script: { run: createRunProxy(null, null) } };
 
-  // =========================================================================
-  // ৩. রিয়েল-টাইম রাউটার (ক্লিক করা মাত্রই সেই পেজটি লোড হবে)
-  // =========================================================================
+  // পেজ লোডার (সরাসরি আসল HTML ফাইল লোড করবে)
   function navigateTo(pageName) {
     const loader = document.getElementById('loading');
     const mainContent = document.getElementById('main-content');
@@ -306,9 +251,9 @@ if (isset($_GET['load_page'])) {
     if (loader) loader.classList.remove('hidden');
     if (mainContent) mainContent.style.opacity = '0.3';
 
-    fetch(`index.php?load_page=${pageName}`)
+    fetch(`${pageName}.html`)
       .then(res => {
-        if (!res.ok) throw new Error("পেজটি লোড করা সম্ভব হয়নি");
+        if (!res.ok) throw new Error("ফাইলটি লোড করা সম্ভব হয়নি");
         return res.text();
       })
       .then(html => {
@@ -322,7 +267,7 @@ if (isset($_GET['load_page'])) {
       })
       .catch(err => {
         if (mainContent) {
-          mainContent.innerHTML = `<div class="max-w-xl mx-auto my-12 p-8 bg-red-50 text-red-600 rounded-3xl text-center font-bold">লোডিং সমস্যা: ${err.message}</div>`;
+          mainContent.innerHTML = `<div class="max-w-xl mx-auto my-12 p-8 bg-red-50 text-red-600 rounded-3xl text-center font-bold">ফাইল লোড ত্রুটি: ${err.message}</div>`;
         }
         if (loader) loader.classList.add('hidden');
         if (mainContent) mainContent.style.opacity = '1';
