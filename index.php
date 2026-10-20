@@ -7,9 +7,16 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- ১. ইমেজ ক্রপার লাইব্রেরি (Cropper.js) -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
+
   <style>
     body { font-family: 'Hind Siliguri', sans-serif; }
     .nav-active { color: #059669 !important; background-color: #f0fdf4; border-radius: 8px; }
+    /* ক্রপার প্রিভিউ কন্টেইনার */
+    .cropper-view-box, .cropper-face { border-radius: 16px; }
   </style>
 </head>
 <body class="bg-gray-50 flex flex-col min-h-screen text-gray-800">
@@ -177,6 +184,48 @@
   <div id="main-content" class="transition-opacity duration-300 opacity-100"></div>
 </main>
 
+<!-- =========================================================================
+     ২. গ্লোবাল ছবি ক্রপার ও অটো-কম্প্রেসর মডাল (Image Cropper Modal)
+     ========================================================================= -->
+<div id="cropper-modal" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-md z-[99999] flex items-center justify-center p-4 select-none">
+  <div class="bg-white rounded-[32px] max-w-lg w-full overflow-hidden shadow-2xl border border-gray-100 flex flex-col max-h-[92vh]">
+    <!-- মডাল হেডার -->
+    <div class="p-5 border-b border-gray-100 flex items-center justify-between bg-slate-50">
+      <div>
+        <h4 class="text-sm sm:text-base font-black text-gray-800 flex items-center gap-2">
+          <i class="fa-solid fa-crop-simple text-emerald-600 text-lg"></i> ছবি ক্রপ ও সাইজ অপ্টিমাইজ করুন
+        </h4>
+        <p class="text-[10px] text-gray-500 font-medium mt-0.5">মুখের অংশটি বক্সের মাঝখানে রাখুন (পাসপোর্ট সাইজ)</p>
+      </div>
+      <button onclick="closeCropperModal()" class="w-8 h-8 rounded-full bg-white hover:bg-slate-200 text-gray-400 hover:text-gray-600 flex items-center justify-center shadow-sm transition">
+        <i class="fa-solid fa-xmark text-sm"></i>
+      </button>
+    </div>
+
+    <!-- ক্রপিং প্রিভিউ এরিয়া -->
+    <div class="p-4 bg-slate-900 flex items-center justify-center overflow-hidden flex-1 min-h-[300px] max-h-[420px]">
+      <img id="cropper-image" src="" class="max-w-full max-h-full block">
+    </div>
+
+    <!-- কন্ট্রোল টুলবার -->
+    <div class="p-3 bg-slate-50 border-t border-b border-gray-100 flex items-center justify-center gap-3">
+      <button type="button" onclick="cropperZoom(0.1)" class="px-3 py-1.5 rounded-xl bg-white border text-xs font-bold text-gray-600 hover:bg-slate-100 shadow-sm" title="জুম ইন"><i class="fa-solid fa-magnifying-glass-plus"></i> জুম</button>
+      <button type="button" onclick="cropperZoom(-0.1)" class="px-3 py-1.5 rounded-xl bg-white border text-xs font-bold text-gray-600 hover:bg-slate-100 shadow-sm" title="জুম আউট"><i class="fa-solid fa-magnifying-glass-minus"></i> জুম আউট</button>
+      <button type="button" onclick="cropperRotate(-90)" class="px-3 py-1.5 rounded-xl bg-white border text-xs font-bold text-gray-600 hover:bg-slate-100 shadow-sm" title="বামে ঘোরান"><i class="fa-solid fa-rotate-left"></i></button>
+      <button type="button" onclick="cropperRotate(90)" class="px-3 py-1.5 rounded-xl bg-white border text-xs font-bold text-gray-600 hover:bg-slate-100 shadow-sm" title="ডানে ঘোরান"><i class="fa-solid fa-rotate-right"></i></button>
+      <button type="button" onclick="cropperReset()" class="px-3 py-1.5 rounded-xl bg-white border text-xs font-bold text-gray-600 hover:bg-slate-100 shadow-sm" title="রিসেট"><i class="fa-solid fa-arrows-rotate"></i> রিসেট</button>
+    </div>
+
+    <!-- ফুটার বাটন -->
+    <div class="p-4 flex gap-3 bg-white">
+      <button type="button" onclick="closeCropperModal()" class="flex-1 py-3 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition">বাতিল</button>
+      <button type="button" onclick="confirmCrop()" class="flex-1 py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black shadow-lg shadow-emerald-600/20 transition flex items-center justify-center gap-2">
+        <i class="fa-solid fa-check"></i> ক্রপ ও সাইজ ছোট করুন
+      </button>
+    </div>
+  </div>
+</div>
+
 <!-- ফুটার -->
 <footer class="bg-slate-950 text-gray-400 select-none mt-16">
   <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-12 pt-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 text-sm">
@@ -214,7 +263,118 @@
 </footer>
 
 <script>
-  // সুরক্ষিত TiDB ডাটাবেজ ব্রিজ (এরর মেসেজ যাতে কোনোভাবেই undefined না হয়)
+  // =========================================================================
+  // ৩. গ্লোবাল ছবি অপ্টিমাইজেশন ও ক্রপিং লজিক
+  // (১০ মেগাবাইটের ছবিকে স্বয়ংক্রিয়ভাবে ক্রপ করে মাত্র ৩০-৫০ কেবি বানিয়ে দেবে)
+  // =========================================================================
+  let globalCropper = null;
+  let activeCropCallback = null;
+
+  function openCropTool(file, callback, targetWidth = 350, targetHeight = 350) {
+    if (!file || !file.type.startsWith('image/')) return;
+
+    activeCropCallback = callback;
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      const cropperImg = document.getElementById('cropper-image');
+      cropperImg.src = e.target.result;
+
+      const modal = document.getElementById('cropper-modal');
+      modal.classList.remove('hidden');
+
+      if (globalCropper) {
+        globalCropper.destroy();
+      }
+
+      // ১:১ পাসপোর্ট সাইজ ক্রপার শুরু করা
+      globalCropper = new Cropper(cropperImg, {
+        aspectRatio: targetWidth / targetHeight,
+        viewMode: 1,
+        autoCropArea: 0.9,
+        responsive: true,
+        guides: true
+      });
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function cropperZoom(ratio) {
+    if (globalCropper) globalCropper.zoom(ratio);
+  }
+  function cropperRotate(deg) {
+    if (globalCropper) globalCropper.rotate(deg);
+  }
+  function cropperReset() {
+    if (globalCropper) globalCropper.reset();
+  }
+
+  function closeCropperModal() {
+    const modal = document.getElementById('cropper-modal');
+    modal.classList.add('hidden');
+    if (globalCropper) {
+      globalCropper.destroy();
+      globalCropper = null;
+    }
+    activeCropCallback = null;
+  }
+
+  function confirmCrop() {
+    if (!globalCropper) return;
+
+    // ৩৫০x৩৫০ পিক্সেল এবং ০.৭৫ জেপিইজি কোয়ালিটিতে কম্প্রেস করা (সাইজ নামবে ৩৫-৫০ KB-তে)
+    const canvas = globalCropper.getCroppedCanvas({
+      width: 350,
+      height: 350,
+      imageSmoothingEnabled: true,
+      imageSmoothingQuality: 'high'
+    });
+
+    const compressedBase64 = canvas.toDataURL('image/jpeg', 0.75);
+
+    if (typeof activeCropCallback === 'function') {
+      activeCropCallback(compressedBase64);
+    }
+
+    closeCropperModal();
+  }
+
+  // =========================================================================
+  // ৪. ফর্মের ফাইল ইনপুটগুলোর সাথে ক্রপারের স্বয়ংক্রিয় সংযুক্তি (Auto Binding)
+  // =========================================================================
+  document.addEventListener('change', function(e) {
+    const target = e.target;
+    // যদি যেকোনো ফটো ইনপুট পরিবর্তিত হয়
+    if (target && target.type === 'file' && target.accept && target.accept.includes('image')) {
+      const file = target.files[0];
+      if (!file) return;
+
+      // সংশ্লিষ্ট প্রিভিউ ইমেজ খুঁজে নেওয়া
+      const previewId = target.id.replace('file', 'preview').replace('photo', 'photo-preview');
+      const previewEl = document.getElementById(previewId) || document.getElementById('photo-preview') || document.getElementById('donor-photo-preview') || document.getElementById('comm-photo-preview');
+
+      openCropTool(file, function(optimizedBase64) {
+        // লাইভ প্রিভিউতে ছোট সাইজের ছবি দেখানো
+        if (previewEl) {
+          previewEl.src = optimizedBase64;
+          previewEl.classList.remove('hidden');
+        }
+        // গ্লোবাল ভ্যারিয়েবলগুলোতে কম্প্রেসড ছবি সেট করে দেওয়া
+        if (typeof photoBase64 !== 'undefined') photoBase64 = optimizedBase64;
+        if (typeof donorPhotoBase64 !== 'undefined') donorPhotoBase64 = optimizedBase64;
+        if (typeof recipientPhotoBase64 !== 'undefined') recipientPhotoBase64 = optimizedBase64;
+        if (typeof regPhotoBase64 !== 'undefined') regPhotoBase64 = optimizedBase64;
+        if (typeof commPhotoBase64 !== 'undefined') commPhotoBase64 = optimizedBase64;
+
+        // হিডেন ইনপুটে ভ্যালু বসানো
+        const hiddenInput = document.getElementById('comm-existing-photo') || document.getElementById('m-existing-photo') || document.getElementById('c-existing-photo');
+        if (hiddenInput) hiddenInput.value = optimizedBase64;
+      });
+    }
+  });
+
+  // =========================================================================
+  // ৫. সুরক্ষিত TiDB এপিআই ব্রিজ ও রাউটার
+  // =========================================================================
   function executeServerFunction(functionName, args, onSuccess, onFailure) {
     fetch('api.php', {
       method: 'POST',
